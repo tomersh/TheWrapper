@@ -103,14 +103,24 @@ static NSMutableDictionary* _wrappedFunctions;
     return [NSString stringWithFormat:@"%@_%@",NSStringFromClass(clazz), NSStringFromSelector(selector)];
 }
 
+
++ (WrappedFunctionData*) getFunctionData:(Class) clazz andSelector:(SEL) selector
+{
+    while(clazz)
+    {
+        WrappedFunctionData* wrappedFunctionData = [_wrappedFunctions objectForKey:[TheWrapper getStoredKeyForClass:clazz andSelector:selector]];
+        if (wrappedFunctionData) return wrappedFunctionData;
+        clazz = class_getSuperclass(clazz);
+    }
+    return nil;
+}
+
 static id WrapperFunction(id self, SEL _cmd, ...)
 {
     va_list args;
     va_start(args, _cmd);
     
-    NSString* functionKey = [TheWrapper getStoredKeyForClass:[self class] andSelector:_cmd];
-    
-    WrappedFunctionData* wrappedFunctionData = [_wrappedFunctions objectForKey:functionKey];
+    WrappedFunctionData* wrappedFunctionData = [TheWrapper getFunctionData:[self class] andSelector:_cmd];
     
     if (!wrappedFunctionData) return nil;
     

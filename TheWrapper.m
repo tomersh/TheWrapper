@@ -25,6 +25,21 @@
 
 @synthesize preRunBlock = _preRunBlock, postRunBlock = _postRunBlock, functionPointer = _functionPointer;
 
+-(id) initWithFunctionPointerAddress:(int) functionPointerAddress andPreRunBlock:(void (^)(va_list args)) preRunblock andPostRunBlock:(id (^)(id functionReturnValue, va_list args)) postRunBlock {
+    self = [super init];
+    if (!self) return self;
+    self.functionPointer = functionPointerAddress;
+    self.preRunBlock = preRunblock;
+    self.postRunBlock = postRunBlock;
+    return self;
+}
+
+-(void)dealloc {
+    self.preRunBlock = nil;
+    self.postRunBlock = nil;
+    [super dealloc];
+}
+
 @end
 
 @implementation TheWrapper
@@ -43,60 +58,72 @@ static NSMutableDictionary* _wrappedFunctions;
     return class_isMetaClass(object_getClass(object));
 }
 
-+(WrappedFunctionData*) createWrapperDataWith:(int) functionPointer andPreRunBlock:(void (^)(va_list args)) preRunblock andPostRunBlock:(id (^)(id functionReturnValue, va_list args)) postRunBlock{
++(void) addWrapperto:(id<NSObject>) target andSelector:(SEL) selector withPreRunBlock:(void (^)(va_list args)) preRunblock {
+    [TheWrapper addWrapperto:target andSelector:selector withPreRunBlock:preRunblock andPostRunBlock:nil];
+}
+
++(void) addWrapperto:(id<NSObject>) target andSelector:(SEL) selector withPostRunBlock:(id (^)(id functionReturnValue, va_list args)) postRunBlock {
+    [TheWrapper addWrapperto:target andSelector:selector withPreRunBlock:nil andPostRunBlock:postRunBlock];
+}
+
++(void) addWrapperto:(id<NSObject>) target andSelector:(SEL) selector withPreRunBlock:(void (^)(va_list args)) preRunblock andPostRunBlock:(id (^)(id functionReturnValue, va_list args)) postRunBlock {
     
-    WrappedFunctionData* wrappedFunctionData = [[WrappedFunctionData alloc] init];
-    wrappedFunctionData.functionPointer = functionPointer;
-    wrappedFunctionData.preRunBlock = preRunblock;
-    wrappedFunctionData.postRunBlock = postRunBlock;
-    if (postRunBlock == nil) {
-        wrappedFunctionData.postRunBlock = ^(id functionReturnValue, va_list args) { return functionReturnValue; };
-    }
-    return [wrappedFunctionData autorelease];
+    Class clazz = [TheWrapper isInstance:target] ? [target class] : target;
+    [TheWrapper addWrappertoClass:clazz andSelector:selector withPreRunBlock:preRunblock andPostRunBlock:postRunBlock];
 }
 
 
-+(void) addWrapperto:(id) target andSelector:(SEL) selector withPreRunBlock:(void (^)(va_list args)) preRunblock {
-     [TheWrapper addWrapperto:target andSelector:selector withPreRunBlock:preRunblock andPostRunBlock:nil];
++(void) addWrappertoClass:(Class) clazz andSelector:(SEL) selector withPreRunBlock:(void (^)(va_list args)) preRunblock {
+    [TheWrapper addWrappertoClass:clazz andSelector:selector withPreRunBlock:preRunblock andPostRunBlock:nil];
 }
 
-+(void) addWrapperto:(id) target andSelector:(SEL) selector withPostRunBlock:(id (^)(id functionReturnValue, va_list args)) postRunBlock {
-     [TheWrapper addWrapperto:target andSelector:selector withPreRunBlock:nil andPostRunBlock:postRunBlock];
++(void) addWrappertoClass:(Class) clazz andSelector:(SEL) selector withPostRunBlock:(id (^)(id functionReturnValue, va_list args)) postRunBlock {
+    [TheWrapper addWrappertoClass:clazz andSelector:selector withPreRunBlock:nil andPostRunBlock:postRunBlock];
 }
 
-+(void) addWrapperto:(id) target andSelector:(SEL) selector withPreRunBlock:(void (^)(va_list args)) preRunblock andPostRunBlock:(id (^)(id functionReturnValue, va_list args)) postRunBlock {
+
++(void) addWrappertoClass:(Class) clazz andSelector:(SEL) selector withPreRunBlock:(void (^)(va_list args)) preRunblock andPostRunBlock:(id (^)(id functionReturnValue, va_list args)) postRunBlock {
     
-    Class originalClass = [TheWrapper isInstance:target] ? [target class] : target;
-    
-    Method originalMethod;
-    
-    if ([TheWrapper isInstance:target]) {
-        originalMethod = class_getInstanceMethod(originalClass, selector);
-    }
-    else {
-        originalMethod = class_getClassMethod(originalClass, selector);
+    Method originalMethod = class_getInstanceMethod(clazz, selector);
+
+    if(originalMethod == nil) {
+        originalMethod = class_getClassMethod(clazz, selector);
     }
     
     void* originaImplementation = (void *)method_getImplementation(originalMethod);
     int* pointerToFunction = (void*)&originaImplementation;
     int pointerAddress = *pointerToFunction;
     
-    WrappedFunctionData* originFunctionWrapper = [_wrappedFunctions objectForKey:[TheWrapper getStoredKeyForClass:originalClass andSelector:selector]];
+    WrappedFunctionData* originFunctionWrapper = [_wrappedFunctions objectForKey:[TheWrapper getStoredKeyForClass:clazz andSelector:selector]];
     
     BOOL isAlreadyWrapped = originFunctionWrapper != nil;
     
     if(isAlreadyWrapped) {
         pointerAddress = originFunctionWrapper.functionPointer;
+        return;
     }
     
-    WrappedFunctionData* wrappedFunctionData = [TheWrapper createWrapperDataWith:pointerAddress andPreRunBlock:preRunblock andPostRunBlock:postRunBlock];
+    originFunctionWrapper = [[WrappedFunctionData alloc] initWithFunctionPointerAddress:pointerAddress andPreRunBlock:preRunblock andPostRunBlock:postRunBlock];
+
+    [_wrappedFunctions setValue:originFunctionWrapper forKey:[TheWrapper getStoredKeyForClass:clazz andSelector:selector]];
     
-    [_wrappedFunctions setValue:wrappedFunctionData forKey:[TheWrapper getStoredKeyForClass:originalClass andSelector:selector]];
-    
-    if(isAlreadyWrapped) return;
-    
-    if(!class_addMethod(originalClass, selector, (IMP)WrapperFunction, method_getTypeEncoding(originalMethod)))
-        method_setImplementation(originalMethod, (IMP)WrapperFunction);
+    [originFunctionWrapper release];
+        
+    if(class_addMethod(clazz, selector, (IMP)WrapperFunction, method_getTypeEncoding(originalMethod))) {
+         method_setImplementation(originalMethod, (IMP)WrapperFunction);
+    }
+    else {
+        class_replaceMethod(clazz, selector, (IMP)WrapperFunction, method_getTypeEncoding(originalMethod));
+    }
+}
+
++(void) removeWrapperFrom:(id<NSObject>) target andSelector:(SEL) selector {
+    Class clazz = [TheWrapper isInstance:target] ? [target class] : target;
+    [TheWrapper removeWrapperFromClass:clazz andSelector:selector];
+}
+
++(void) removeWrapperFromClass:(Class) clazz andSelector:(SEL) selector {
+    [_wrappedFunctions removeObjectForKey:[TheWrapper getStoredKeyForClass:clazz andSelector:selector]];
 }
 
 +(NSString*) getStoredKeyForClass:(Class) clazz andSelector:(SEL) selector {
@@ -122,7 +149,10 @@ static id WrapperFunction(id self, SEL _cmd, ...)
     
     WrappedFunctionData* wrappedFunctionData = [TheWrapper getFunctionData:[self class] andSelector:_cmd];
     
-    if (!wrappedFunctionData) return nil;
+    if (!wrappedFunctionData) {
+        [(NSObject*)self doesNotRecognizeSelector:_cmd];
+        return self;
+    }
     
     BLOCK_SAFE_RUN(wrappedFunctionData.preRunBlock, args);
     
@@ -131,6 +161,10 @@ static id WrapperFunction(id self, SEL _cmd, ...)
     id (*implementation)(id, SEL, ...) = (void *)*&pointerAddress;
     
     id functionReturnValue = implementation(self, _cmd, args);
+    
+    if (wrappedFunctionData.postRunBlock == nil) {
+        return functionReturnValue;
+    }
     
     id returnValue = BLOCK_SAFE_RUN(wrappedFunctionData.postRunBlock, functionReturnValue, args);
     

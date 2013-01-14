@@ -45,6 +45,9 @@ Now, calling foo will print
 The original function's return value is accessible to the `PostRunBlock` via the `functionReturnValue` parameter.
 If you wish to return the original return value, just return it from the `PostRunBlock`.
 
+##Examples
+[NanoProfiler](https://github.com/tomersh/NanoProfiler) is the first public usage of theWrapper. 
+
 ##Known issues
 
 1. No arc support

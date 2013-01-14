@@ -41,6 +41,10 @@ Now, calling foo will print
 //My name is Mike
 //Bye,
 ```
+
+The original function's return value is accessible to the `PostRunBlock` via the `functionReturnValue` parameter.
+If you wish to return the original return value, just return it from the `PostRunBlock`.
+
 ##Known issues
 
 1. No arc support

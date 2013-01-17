@@ -144,6 +144,8 @@ static NSMutableDictionary* _wrappedFunctions;
 
 static id WrapperFunction(id self, SEL _cmd, ...)
 {
+    id returnValue = nil;
+    NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
     va_list args;
     va_start(args, _cmd);
     
@@ -166,8 +168,8 @@ static id WrapperFunction(id self, SEL _cmd, ...)
         return functionReturnValue;
     }
     
-    id returnValue = BLOCK_SAFE_RUN(wrappedFunctionData.postRunBlock, functionReturnValue, args);
-    
+    returnValue = BLOCK_SAFE_RUN(wrappedFunctionData.postRunBlock, functionReturnValue, args);
+    [pool drain];
     return returnValue;
 }
 

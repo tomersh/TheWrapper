@@ -162,13 +162,12 @@ static id WrapperFunction(id self, SEL _cmd, ...)
     
     id (*implementation)(id, SEL, ...) = (void *)*&pointerAddress;
     
-    id functionReturnValue = implementation(self, _cmd, args);
+    returnValue = implementation(self, _cmd, args);
     
-    if (wrappedFunctionData.postRunBlock == nil) {
-        return functionReturnValue;
+    if (wrappedFunctionData.postRunBlock != nil) {
+        returnValue = BLOCK_SAFE_RUN(wrappedFunctionData.postRunBlock, returnValue, args);
     }
     
-    returnValue = BLOCK_SAFE_RUN(wrappedFunctionData.postRunBlock, functionReturnValue, args);
     [pool drain];
     return returnValue;
 }

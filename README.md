@@ -3,7 +3,7 @@ TheWrapper
 
 An objective C utility that lets you add a wrapper to any function.
 
-##What?!
+##What is it?
 
 Suppose you have the following method
 ```objectivec
@@ -22,11 +22,11 @@ Just add the following code before the first call to the function.
 #import "TheWrapper.h"
 
 +(void) initialize {
-    [TheWrapper addWrappertoClass:[MyClass class] andSelector:@selector(foo) withPreRunBlock:^(va_list args)
+    [TheWrapper addWrappertoClass:[MyClass class] andSelector:@selector(foo) withPreRunBlock:^(id<NSObject> zelf, id firstArg, ...) {
     {
         NSLog(@"Hi,");
     }
-    andPostRunBlock:^id(id functionReturnValue, va_list args)
+    andPostRunBlock:^id(id<NSObject> zelf, id functionReturnValue, id firstArg, ...) {
     {
         NSLog(@"Bye.");
     }];
